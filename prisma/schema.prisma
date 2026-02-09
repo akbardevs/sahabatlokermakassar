@@ -1,0 +1,441 @@
+// Prisma Schema for Loker Makassar
+// Database: PostgreSQL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Enums
+enum UserRole {
+  JOB_SEEKER
+  EMPLOYER
+  ADMIN
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum JobType {
+  FULL_TIME
+  PART_TIME
+  FREELANCE
+  CONTRACT
+  INTERNSHIP
+}
+
+enum JobLevel {
+  ENTRY
+  MID
+  SENIOR
+  MANAGER
+  DIRECTOR
+}
+
+enum LocationType {
+  ON_SITE
+  REMOTE
+  HYBRID
+}
+
+enum JobStatus {
+  DRAFT
+  PUBLISHED
+  CLOSED
+  EXPIRED
+}
+
+enum ApplicationMethod {
+  INTERNAL
+  EMAIL
+  WHATSAPP
+  EXTERNAL_LINK
+}
+
+enum ApplicationStatus {
+  PENDING
+  REVIEWED
+  SHORTLISTED
+  INTERVIEWED
+  REJECTED
+  ACCEPTED
+}
+
+enum EmploymentStatus {
+  CURRENT
+  FORMER
+}
+
+enum AlertFrequency {
+  INSTANT
+  DAILY
+  WEEKLY
+}
+
+enum ArticleStatus {
+  DRAFT
+  PUBLISHED
+}
+
+// Models
+
+model User {
+  id                String    @id @default(uuid())
+  email             String    @unique
+  phone             String?   @unique
+  passwordHash      String    @map("password_hash")
+  role              UserRole  @default(JOB_SEEKER)
+
+  // Profile Info
+  fullName          String    @map("full_name")
+  dateOfBirth       DateTime? @map("date_of_birth") @db.Date
+  gender            Gender?
+  profilePictureUrl String?   @map("profile_picture_url")
+
+  // Location
+  locationCity      String?   @map("location_city")
+  locationDistrict  String?   @map("location_district")
+
+  // Job Seeker Info
+  educationLevel    String?   @map("education_level")
+  resumeUrl         String?   @map("resume_url")
+  bio               String?   @db.Text
+  skills            Json?     // Array of skills
+
+  // Status
+  isVerified        Boolean   @default(false) @map("is_verified")
+  isActive          Boolean   @default(true) @map("is_active")
+  emailVerifiedAt   DateTime? @map("email_verified_at")
+
+  // Timestamps
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  company           Company?
+  applications      JobApplication[]
+  savedJobs         SavedJob[]
+  jobAlerts         JobAlert[]
+  companyReviews    CompanyReview[]
+  articles          Article[]
+  notifications     Notification[]
+
+  @@map("users")
+  @@index([email])
+  @@index([role])
+}
+
+model Company {
+  id                      String    @id @default(uuid())
+  userId                  String    @unique @map("user_id")
+
+  // Company Info
+  companyName             String    @map("company_name")
+  companySlug             String    @unique @map("company_slug")
+  industry                String?
+  companySize             String?   @map("company_size")
+  description             String?   @db.Text
+
+  // Media
+  logoUrl                 String?   @map("logo_url")
+  websiteUrl              String?   @map("website_url")
+
+  // Contact
+  email                   String?
+  phone                   String?
+  address                 String?   @db.Text
+  city                    String?
+  province                String?
+  postalCode              String?   @map("postal_code")
+
+  // Verification
+  isVerified              Boolean   @default(false) @map("is_verified")
+  verificationDocumentUrl String?   @map("verification_document_url")
+
+  // Rating
+  rating                  Decimal   @default(0) @db.Decimal(3, 2)
+  totalReviews            Int       @default(0) @map("total_reviews")
+
+  // Timestamps
+  createdAt               DateTime  @default(now()) @map("created_at")
+  updatedAt               DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  user                    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobs                    Job[]
+  reviews                 CompanyReview[]
+
+  @@map("companies")
+  @@index([companySlug])
+  @@index([isVerified])
+  @@index([city])
+}
+
+model Job {
+  id                  String            @id @default(uuid())
+  companyId           String            @map("company_id")
+
+  // Job Info
+  title               String
+  slug                String            @unique
+  description         String            @db.Text
+  requirements        String?           @db.Text
+  responsibilities    String?           @db.Text
+  benefits            String?           @db.Text
+
+  // Job Details
+  jobType             JobType           @map("job_type")
+  jobLevel            JobLevel          @map("job_level")
+  educationMin        String?           @map("education_min")
+  experienceMin       Int?              @map("experience_min")
+  experienceMax       Int?              @map("experience_max")
+
+  // Salary
+  salaryMin           Decimal?          @map("salary_min") @db.Decimal(15, 2)
+  salaryMax           Decimal?          @map("salary_max") @db.Decimal(15, 2)
+  salaryCurrency      String            @default("IDR") @map("salary_currency")
+  isSalaryNegotiable  Boolean           @default(false) @map("is_salary_negotiable")
+  showSalary          Boolean           @default(true) @map("show_salary")
+
+  // Location
+  locationType        LocationType      @map("location_type")
+  city                String?
+  district            String?
+  address             String?           @db.Text
+
+  // Category & Skills
+  category            String?
+  skills              Json?             // Array of required skills
+
+  // Positions
+  totalPositions      Int               @default(1) @map("total_positions")
+
+  // Application
+  applicationDeadline DateTime?         @map("application_deadline") @db.Date
+  contactEmail        String?           @map("contact_email")
+  contactPhone        String?           @map("contact_phone")
+  contactWhatsapp     String?           @map("contact_whatsapp")
+  applicationMethod   ApplicationMethod @map("application_method")
+  externalApplyUrl    String?           @map("external_apply_url")
+
+  // Status & Metrics
+  status              JobStatus         @default(DRAFT)
+  viewCount           Int               @default(0) @map("view_count")
+  applicationCount    Int               @default(0) @map("application_count")
+
+  // Premium Features
+  isFeatured          Boolean           @default(false) @map("is_featured")
+  isUrgent            Boolean           @default(false) @map("is_urgent")
+
+  // Timestamps
+  publishedAt         DateTime?         @map("published_at")
+  expiresAt           DateTime?         @map("expires_at")
+  createdAt           DateTime          @default(now()) @map("created_at")
+  updatedAt           DateTime          @updatedAt @map("updated_at")
+
+  // Relations
+  company             Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  applications        JobApplication[]
+  savedByUsers        SavedJob[]
+
+  @@map("jobs")
+  @@index([slug])
+  @@index([status])
+  @@index([category])
+  @@index([city])
+  @@index([jobType])
+  @@index([publishedAt])
+  @@index([companyId])
+}
+
+model JobApplication {
+  id                  String            @id @default(uuid())
+  jobId               String            @map("job_id")
+  userId              String            @map("user_id")
+
+  // Application Data
+  resumeUrl           String            @map("resume_url")
+  coverLetter         String?           @map("cover_letter") @db.Text
+  additionalDocuments Json?             @map("additional_documents")
+
+  // Status
+  status              ApplicationStatus @default(PENDING)
+  notes               String?           @db.Text // Employer notes
+
+  // Timestamps
+  appliedAt           DateTime          @default(now()) @map("applied_at")
+  updatedAt           DateTime          @updatedAt @map("updated_at")
+
+  // Relations
+  job                 Job               @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  user                User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, userId])
+  @@map("job_applications")
+  @@index([userId])
+  @@index([status])
+}
+
+model SavedJob {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  jobId     String   @map("job_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, jobId])
+  @@map("saved_jobs")
+  @@index([userId])
+}
+
+model JobAlert {
+  id             String         @id @default(uuid())
+  userId         String         @map("user_id")
+
+  // Alert Criteria
+  alertName      String?        @map("alert_name")
+  keywords       String?
+  category       String?
+  jobType        JobType?       @map("job_type")
+  location       String?
+  salaryMin      Decimal?       @map("salary_min") @db.Decimal(15, 2)
+  educationLevel String?        @map("education_level")
+
+  // Settings
+  frequency      AlertFrequency @default(DAILY)
+  isActive       Boolean        @default(true) @map("is_active")
+
+  // Tracking
+  lastSentAt     DateTime?      @map("last_sent_at")
+  createdAt      DateTime       @default(now()) @map("created_at")
+
+  // Relations
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("job_alerts")
+  @@index([userId])
+  @@index([isActive])
+}
+
+model CompanyReview {
+  id               String           @id @default(uuid())
+  companyId        String           @map("company_id")
+  userId           String?          @map("user_id") // Nullable for anonymous reviews
+
+  // Review Content
+  rating           Int              // 1-5
+  reviewTitle      String?          @map("review_title")
+  reviewText       String?          @map("review_text") @db.Text
+  pros             String?          @db.Text
+  cons             String?          @db.Text
+
+  // Reviewer Info
+  jobTitle         String?          @map("job_title")
+  employmentStatus EmploymentStatus? @map("employment_status")
+
+  // Status
+  isVerified       Boolean          @default(false) @map("is_verified")
+  isAnonymous      Boolean          @default(false) @map("is_anonymous")
+  helpfulCount     Int              @default(0) @map("helpful_count")
+
+  // Timestamps
+  createdAt        DateTime         @default(now()) @map("created_at")
+  updatedAt        DateTime         @updatedAt @map("updated_at")
+
+  // Relations
+  company          Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user             User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@map("company_reviews")
+  @@index([companyId])
+  @@index([rating])
+}
+
+model Article {
+  id               String        @id @default(uuid())
+  authorId         String?       @map("author_id")
+
+  // Content
+  title            String
+  slug             String        @unique
+  content          String        @db.Text
+  excerpt          String?       @db.Text
+  featuredImageUrl String?       @map("featured_image_url")
+
+  // Categorization
+  category         String?
+  tags             Json?         // Array of tags
+
+  // Status & Metrics
+  status           ArticleStatus @default(DRAFT)
+  viewCount        Int           @default(0) @map("view_count")
+
+  // Timestamps
+  publishedAt      DateTime?     @map("published_at")
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
+
+  // Relations
+  author           User?         @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@map("articles")
+  @@index([slug])
+  @@index([status])
+  @@index([category])
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+
+  // Notification Content
+  type      String   // 'job_alert', 'application_update', 'new_message', etc.
+  title     String
+  message   String   @db.Text
+  data      Json?    // Additional data
+
+  // Status
+  isRead    Boolean  @default(false) @map("is_read")
+
+  // Timestamp
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+  @@index([userId, isRead])
+  @@index([createdAt])
+}
+
+model AnalyticsEvent {
+  id         String   @id @default(uuid())
+  userId     String?  @map("user_id")
+
+  // Event Info
+  eventType  String   @map("event_type") // 'job_view', 'job_apply', 'search', etc.
+  eventData  Json?    @map("event_data")
+
+  // Request Info
+  ipAddress  String?  @map("ip_address")
+  userAgent  String?  @map("user_agent") @db.Text
+
+  // Timestamp
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@map("analytics_events")
+  @@index([eventType])
+  @@index([createdAt])
+  @@index([userId])
+}
